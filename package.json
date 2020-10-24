@@ -3,6 +3,7 @@
     "displayName": "Aggressive Auto JSON",
     "description": "Double quotes and commas are added and removed fully automatically when you edit JSON.",
     "version": "0.0.1",
+    "license": "SEE LICENSE IN LICENSE_1_0.txt",
     "engines": {
         "vscode": "^1.50.0"
     },
