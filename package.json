@@ -17,6 +17,16 @@
     "contributes": {
         "commands": [
             {
+                "command": "aggressiveAutoJson.toggleMute",
+                "title": "%aggressiveAutoJson.toggleMute.title%",
+                "category": "Aggressive Auto JSON"
+            },
+            {
+                "command": "aggressiveAutoJson.toggleMuteAll",
+                "title": "%aggressiveAutoJson.toggleMuteAll.title%",
+                "category": "Aggressive Auto JSON"
+            },
+            {
                 "command": "aggressive-auto-json.helloWorld",
                 "title": "Hello World"
             }
