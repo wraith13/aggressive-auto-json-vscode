@@ -37,9 +37,15 @@
                 "properties": {
                     "aggressiveAutoJson.enabled": {
                         "type": "boolean",
-                        "default": true,
+                        "default": false,
                         "description": "%aggressiveAutoJson.enabled.description%",
                         "scope": "language-overridable"
+                    },
+                    "aggressiveAutoJson.debug": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "%aggressiveAutoJson.debug.description%",
+                        "scope": "window"
                     },
                     "aggressiveAutoJson.autoAddComma": {
                         "type": "boolean",
@@ -61,7 +67,15 @@
                     }
                 }
             }
-        ]
+        ],
+        "configurationDefaults": {
+            "[json]": {
+                "aggressiveAutoJson.enabled": true
+            },
+            "[jsonc]": {
+                "aggressiveAutoJson.enabled": true
+            }
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
