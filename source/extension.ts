@@ -55,43 +55,26 @@ const parseJSON = (document: vscode.TextDocument) => profile
     (): BracketEntry[] =>
     {
         const result:BracketEntry[] = [];
-        const languageConfiguration = Config.languageConfiguration.get(document.languageId);
-        const regulate = languageConfiguration.ignoreCase ?
-            (text: string) => text.replace(/\s+/, " ").toLowerCase():
-            (text: string) => text.replace(/\s+/, " ");
-        const openingBlockComments = languageConfiguration.comments?.block?.map(i => regulate(i.opening)) ?? [];
-        const closingBlockComments = languageConfiguration.comments?.block?.map(i => regulate(i.closing)) ?? [];
-        const lineComments = languageConfiguration.comments?.line?.map(regulate) ?? [];
-        const openingSymbolBrackets = languageConfiguration.brackets?.symbol?.map(i => regulate(i.opening)) ?? [];
-        const symbolBracketInters = languageConfiguration.brackets?.symbol?.map(i => i.inters?.map(regulate) ?? [])?.reduce((a, b) => a.concat(b), []) ?? [];
-        const closingSymbolBrackets = languageConfiguration.brackets?.symbol?.map(i => regulate(i.closing)) ?? [];
-        const symbolBracketsHeader = languageConfiguration.brackets?.symbol?.map(i => i.headerMode ?? "smart") ?? [];
-        const openingWordBrackets = languageConfiguration.brackets?.word?.map(i => regulate(i.opening)) ?? [];
-        const wordBracketInters = languageConfiguration.brackets?.word?.map(i => i.inters?.map(regulate) ?? [])?.reduce((a, b) => a.concat(b), []) ?? [];
-        const closingWordBrackets = languageConfiguration.brackets?.word?.map(i => regulate(i.closing)) ?? [];
-        const wordBracketsHeader = languageConfiguration.brackets?.word?.map(i => i.headerMode ?? "inner") ?? [];
-        const openingInlineStrings = languageConfiguration.strings?.inline?.map(i => regulate(i.opening)) ?? [];
-        const escapeInlineStrings = languageConfiguration.strings?.inline?.map(i => regulate(i.escape)) ?? [];
-        const closingInlineStrings = languageConfiguration.strings?.inline?.map(i => regulate(i.closing)) ?? [];
-        const openingMultilineStrings = languageConfiguration.strings?.multiline?.map(i => regulate(i.opening)) ?? [];
-        const escapeMultilineStrings = languageConfiguration.strings?.multiline?.map(i => regulate(i.escape)) ?? [];
-        const closingMultilineStrings = languageConfiguration.strings?.multiline?.map(i => regulate(i.closing)) ?? [];
+        const regulate = (text: string) => text.replace(/\s+/, " ");
+        const openingBlockComments = ["/*"];
+        const closingBlockComments = ["*/"];
+        const lineComments = ["//"];
+        const openingSymbolBrackets = ["{", "["];
+        const closingSymbolBrackets = ["}", "]"];
+        const colon = ":";
+        const comma = ",";
+        const openingInlineStrings = ["\""];
+        const escapeInlineStrings = ["\\\""];
+        const closingInlineStrings = ["\""];
         const pattern = (<string[]>[])
             .concat(openingBlockComments)
             .concat(closingBlockComments)
             .concat(lineComments)
             .concat(openingSymbolBrackets)
-            .concat(symbolBracketInters)
             .concat(closingSymbolBrackets)
-            .concat(openingWordBrackets)
-            .concat(wordBracketInters)
-            .concat(closingWordBrackets)
             .concat(openingInlineStrings)
             .concat(escapeInlineStrings)
             .concat(closingInlineStrings)
-            .concat(openingMultilineStrings)
-            .concat(escapeMultilineStrings)
-            .concat(closingMultilineStrings)
             .filter((entry, index, array) => "" !== entry && index === array.indexOf(entry))
             .map(i => `${makeRegExpPart(i)}`)
             .join("|");
@@ -133,7 +116,7 @@ const parseJSON = (document: vscode.TextDocument) => profile
             "parseJSON.scan",
             () =>
             {
-                let scopeStack: { start: TokenEntry, closing:string, headerMode: HeaderMode, items: BracketEntry[] }[] = [];
+                let scopeStack: { start: TokenEntry, closing:string, items: BracketEntry[] }[] = [];
                 let i = 0;
                 const writeCore = (entry: BracketEntry) => profile
                 (
@@ -255,43 +238,13 @@ const parseJSON = (document: vscode.TextDocument) => profile
                                         token: tokens[i].token,
                                     },
                                     closing: closingSymbolBrackets[index],
-                                    headerMode: symbolBracketsHeader[index],
                                     items: [],
                                 });
                                 ++i;
                             }
                         );
                     }
-                    else
-                    if (0 <= openingWordBrackets.indexOf(token) && isSureMatchWord(tokens[i]))
-                    {
-                        profile
-                        (
-                            "parseJSON.scan.openingWordBracket",
-                            () =>
-                            {
-                                const index = openingWordBrackets.indexOf(token);
-                                scopeStack.push
-                                ({
-                                    start:
-                                    {
-                                        position: document.positionAt(tokens[i].index),
-                                        token: tokens[i].token,
-                                    },
-                                    closing: closingWordBrackets[index],
-                                    headerMode: wordBracketsHeader[index],
-                                    items: [],
-                                });
-                                ++i;
-                            }
-                        );
-                    }
-                    else
-                    if
-                    (
-                        0 <= closingSymbolBrackets.indexOf(token) ||
-                        (0 <= closingWordBrackets.indexOf(token) && isSureMatchWord(tokens[i]))
-                    )
+                    if (0 <= closingSymbolBrackets.indexOf(token))
                     {
                         profile
                         (
@@ -319,26 +272,6 @@ const parseJSON = (document: vscode.TextDocument) => profile
                                     {
                                         break;
                                     }
-                                    if (closing === regulate(tokens[i].token))
-                                    {
-                                        ++i;
-                                        break;
-                                    }
-                                }
-                            }
-                        );
-                    }
-                    else
-                    if (0 <= openingMultilineStrings.indexOf(token))
-                    {
-                        profile
-                        (
-                            "parseJSON.scan.multilineString",
-                            () =>
-                            {
-                                const closing = closingMultilineStrings[openingMultilineStrings.indexOf(token)];
-                                while(++i < tokens.length)
-                                {
                                     if (closing === regulate(tokens[i].token))
                                     {
                                         ++i;
