@@ -48,13 +48,19 @@ export const regExpExecToArray = (regexp: RegExp, text: string) => profile
         return result;
     }
 );
+interface DiagnosticEntry
+{
+    type: "lack" | "unnecessary";
+    position: vscode.Position;
+    charactor: string;
+}
 const makeRegExpPart = (text: string) => text.replace(/([\\\/\*\[\]\(\)\{\}\|])/gmu, "\\$1").replace(/\s+/, "\\s");
-const parseJSON = (document: vscode.TextDocument) => profile
+const scanJSON = (document: vscode.TextDocument) => profile
 (
-    "parseJSON",
-    (): BracketEntry[] =>
+    "scanJSON",
+    (): DiagnosticEntry[] =>
     {
-        const result:BracketEntry[] = [];
+        const result:DiagnosticEntry[] = [];
         const regulate = (text: string) => text.replace(/\s+/, " ");
         const openingBlockComments = ["/*"];
         const closingBlockComments = ["*/"];
@@ -81,13 +87,7 @@ const parseJSON = (document: vscode.TextDocument) => profile
         const text = document.getText();
         const tokens = regExpExecToArray
         (
-            new RegExp
-            (
-                pattern,
-                languageConfiguration.ignoreCase ?
-                    "gui":
-                    "gu"
-            ),
+            new RegExp(pattern, "gu"),
             text
         )
         .map
@@ -303,22 +303,44 @@ const parseJSON = (document: vscode.TextDocument) => profile
         return result;
     }
 );
-export const aggressiveFormat = (document: vscode.TextDocument) => profile
+export const aggressiveFormat = (textEditor: vscode.TextEditor) => profile
 (
     "aggressiveFormat",
     () =>
     {
-        if (Config.enabled.get(document.languageId))
+        const errors = scanJSON(textEditor.document);
+        if (0 < errors.length)
         {
-            const documentCache = documentFormatCache.get(document);
-            const isMuted = undefined !== documentCache?.isMuted ?
-                documentCache.isMuted:
-                isMutedAll;
-            if ( ! isMuted)
-            {
-                
-            }
-
+            textEditor.edit
+            (
+                editBuilder => errors.forEach
+                (
+                    i =>
+                    {
+                        //  💣 他の insert/delete の影響ってどうなるの？　自分で調整しないとダメ？　それとも vscode 側で勝手にやってくれる？
+                        switch(i.type)
+                        {
+                        case "lack":
+                            editBuilder.delete
+                            (
+                                new vscode.Range
+                                (
+                                    i.position,
+                                    new vscode.Position(i.position.line, i.position.character +i.charactor.length)
+                                )
+                            );
+                            break;
+                        case "unnecessary":
+                            editBuilder.insert
+                            (
+                                i.position,
+                                i.charactor
+                            );
+                            break;
+                        }
+                    }
+                )
+            );
         }
     }
 );
@@ -336,11 +358,11 @@ const getDocumentTextLength = (document: vscode.TextDocument) => document.offset
 );
 //const isClip = (lang: string, textLength: number) => clipByVisibleRange.get(lang)(textLength / Math.max(fileSizeLimit.get(lang), 1024));
 const lastUpdateStamp = new Map<vscode.TextDocument, number>();
-export const delayAggressiveFormat = (document: vscode.TextDocument): void =>
+export const delayAggressiveFormat = (textEditor: vscode.TextEditor): void =>
 {
     const updateStamp = vscel.profiler.getTicks();
-    lastUpdateStamp.set(document, updateStamp);
-    const textLength = getDocumentTextLength(document);
+    lastUpdateStamp.set(textEditor.document, updateStamp);
+    const textLength = getDocumentTextLength(textEditor.document);
     const logUnit = 16 *1024;
     const logRate = Math.pow(Math.max(textLength, logUnit) / logUnit, 1.0 / 2.0);
     //const lang = document.languageId;
@@ -350,7 +372,7 @@ export const delayAggressiveFormat = (document: vscode.TextDocument): void =>
             (
                 100 + //basicDelay.get(lang) +
                 (
-                    undefined === documentFormatCache.get(document) ?
+                    undefined === documentFormatCache.get(textEditor.document) ?
                         100: // additionalDelay.get(lang):
                         0
                 )
@@ -360,27 +382,33 @@ export const delayAggressiveFormat = (document: vscode.TextDocument): void =>
     (
         () =>
         {
-            if (lastUpdateStamp.get(document) === updateStamp)
+            if (lastUpdateStamp.get(textEditor.document) === updateStamp)
             {
-                lastUpdateStamp.delete(document);
-                aggressiveFormat(document);
+                lastUpdateStamp.delete(textEditor.document);
+                if (Config.enabled.get(textEditor.document.languageId))
+                {
+                    const documentCache = documentFormatCache.get(textEditor.document);
+                    const isMuted = undefined !== documentCache?.isMuted ?
+                        documentCache.isMuted:
+                        isMutedAll;
+                    if ( ! isMuted)
+                    {
+                        aggressiveFormat(textEditor);
+                    }
+                }
             }
         },
         delay
     );
 };
-export const onDidChangeTextDocument = (document: vscode.TextDocument): void =>
+export const toggleMute = (textEditor: vscode.TextEditor) =>
 {
-    delayAggressiveFormat(document);
-};
-export const toggleMute = (document: vscode.TextDocument) =>
-{
-    const currentDocumentDecorationCache = makeSureDocumentFormatCache(document);
+    const currentDocumentDecorationCache = makeSureDocumentFormatCache(textEditor.document);
     currentDocumentDecorationCache.isMuted =
         undefined === currentDocumentDecorationCache.isMuted ?
             ! isMutedAll:
             ! currentDocumentDecorationCache.isMuted;
-    delayAggressiveFormat(document);
+    delayAggressiveFormat(textEditor);
 };
 vscel.profiler.start();
 export const activate = (context: vscode.ExtensionContext) =>
@@ -391,7 +419,7 @@ export const activate = (context: vscode.ExtensionContext) =>
         vscode.commands.registerCommand
         (
             `aggressiveAutoJson.toggleMute`,
-            () => valueThen(vscode.window.activeTextEditor?.document, toggleMute)
+            () => valueThen(vscode.window.activeTextEditor, toggleMute)
         ),
         vscode.commands.registerCommand
         (
@@ -403,13 +431,21 @@ export const activate = (context: vscode.ExtensionContext) =>
         ),
         vscode.commands.registerCommand
         (
+            `aggressiveAutoJson.toggleMute`,
+            () => valueThen(vscode.window.activeTextEditor, aggressiveFormat)
+        ),
+        vscode.commands.registerCommand
+        (
             'aggressive-auto-json.helloWorld',
             () =>
             {
                 vscode.window.showInformationMessage('Hello World from Aggressive Auto JSON!');
             }
         ),
-        vscode.workspace.onDidChangeTextDocument(event => onDidChangeTextDocument(event.document))
+        vscode.workspace.onDidChangeTextDocument
+        (
+            () => valueThen(vscode.window.activeTextEditor, delayAggressiveFormat)
+        )
     );
 };
 export const deactivate = () => { };

@@ -27,6 +27,11 @@
                 "category": "Aggressive Auto JSON"
             },
             {
+                "command": "aggressiveAutoJson.regulate",
+                "title": "%aggressiveAutoJson.regulate.title%",
+                "category": "Aggressive Auto JSON"
+            },
+            {
                 "command": "aggressive-auto-json.helloWorld",
                 "title": "Hello World"
             }
