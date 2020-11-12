@@ -54,7 +54,7 @@ interface DiagnosticEntry
     position: vscode.Position;
     charactor: string;
 }
-const makeRegExpPart = (text: string) => text.replace(/([\\\/\*\[\]\(\)\{\}\|])/gmu, "\\$1").replace(/\s+/, "\\s");
+const makeRegExpPart = (text: string) => text.replace(/([\\\/\*\[\]\(\)\{\}\|\.\,])/gmu, "\\$1").replace(/\s+/, "\\s");
 const scanJSON = (document: vscode.TextDocument) => profile
 (
     "scanJSON",
@@ -78,6 +78,7 @@ const scanJSON = (document: vscode.TextDocument) => profile
             .concat(lineComments)
             .concat(openingSymbolBrackets)
             .concat(closingSymbolBrackets)
+            .concat([ colon, comma, ])
             .concat(openingInlineStrings)
             .concat(escapeInlineStrings)
             .concat(closingInlineStrings)
@@ -98,25 +99,12 @@ const scanJSON = (document: vscode.TextDocument) => profile
                 token: match[0],
             })
         );
-        const getCharactoer = (index: number) => index < 0 ? "":
-            document.getText
-            (
-                new vscode.Range
-                (
-                    document.positionAt(index),
-                    document.positionAt(index +1)
-                )
-            );
-        const isIncludeWord = (text: string) => text.replace(/\w/, "").length < text.length;
-        const isSureMatchWord = (match: { index: number, token: string}) =>
-            !isIncludeWord(getCharactoer(match.index -1)) &&
-            !isIncludeWord(getCharactoer(match.index +match.token.length));
         profile
         (
             "parseJSON.scan",
             () =>
             {
-                let scopeStack: { start: TokenEntry, closing:string, items: BracketEntry[] }[] = [];
+                let scopeStack: ("object" | "array")[] = [];
                 let i = 0;
                 const writeCore = (entry: BracketEntry) => profile
                 (
