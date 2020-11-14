@@ -61,7 +61,6 @@ const scanJSON = (document: vscode.TextDocument) => profile
     (): DiagnosticEntry[] =>
     {
         const result:DiagnosticEntry[] = [];
-        const regulate = (text: string) => text.replace(/\s+/, " ");
         const openingBlockComments = ["/*"];
         const closingBlockComments = ["*/"];
         const lineComments = ["//"];
@@ -101,87 +100,27 @@ const scanJSON = (document: vscode.TextDocument) => profile
         );
         profile
         (
-            "parseJSON.scan",
+            "scanJSON.scan",
             () =>
             {
-                let scopeStack: ("object" | "array")[] = [];
+                type Scope = "object" | "array";
+                let scopeStack: Scope[] = [];
                 let i = 0;
-                const writeCore = (entry: BracketEntry) => profile
-                (
-                    "parseJSON.scan.writeCore",
-                    () =>
-                    {
-                        if ( ! isInlineScope(entry) || entry.isUnmatchBrackets)
-                        {
-                            const parent = scopeStack[scopeStack.length -1];
-                            if (parent)
-                            {
-                                parent.items.push(entry);
-                            }
-                            else
-                            {
-                                result.push(entry);
-                            }
-                        }
-                    }
-                );
-                const write = (closingToken: { index: number, token: string }) => profile
-                (
-                    "parseJSON.scan.write",
-                    () =>
-                    {
-                        const scope = scopeStack.pop();
-                        if (scope)
-                        {
-                            writeCore
-                            ({
-                                start: scope.start,
-                                end:
-                                {
-                                    position: document.positionAt(closingToken.index +closingToken.token.length),
-                                    token: closingToken.token,
-                                },
-                                headerMode: scope.headerMode,
-                                isUnmatchBrackets: scope.closing !== regulate(closingToken.token),
-                                items: scope.items,
-                            });
-                        }
-                        else
-                        {
-                            //  余分な閉じ括弧
-                            writeCore
-                            ({
-                                start:
-                                {
-                                    position: document.positionAt(closingToken.index),
-                                    token: closingToken.token,
-                                },
-                                end:
-                                {
-                                    position: document.positionAt(closingToken.index +closingToken.token.length),
-                                    token: closingToken.token,
-                                },
-                                headerMode: "smart",
-                                isUnmatchBrackets: true,
-                                items: [],
-                            });
-                        }
-                    }
-                );
+                let previousToken: typeof tokens[0] | undefined;
                 while(i < tokens.length)
                 {
-                    const token = regulate(tokens[i].token);
+                    const token = tokens[i].token;
                     if (0 <= openingBlockComments.indexOf(token))
                     {
                         profile
                         (
-                            "parseJSON.scan.blockComment",
+                            "scanJSON.scan.blockComment",
                             () =>
                             {
                                 const closing = closingBlockComments[openingBlockComments.indexOf(token)];
                                 while(++i < tokens.length)
                                 {
-                                    if (closing === regulate(tokens[i].token))
+                                    if (closing === tokens[i].token)
                                     {
                                         ++i;
                                         break;
@@ -195,7 +134,7 @@ const scanJSON = (document: vscode.TextDocument) => profile
                     {
                         profile
                         (
-                            "parseJSON.scan.lineComment",
+                            "scanJSON.scan.lineComment",
                             () =>
                             {
                                 const line = document.positionAt(tokens[i].index).line;
@@ -210,46 +149,41 @@ const scanJSON = (document: vscode.TextDocument) => profile
                         );
                     }
                     else
-                    if (0 <= openingSymbolBrackets.indexOf(token))
-                    {
-                        profile
-                        (
-                            "parseJSON.scan.openingSymbolBracket",
-                            () =>
-                            {
-                                const index = openingSymbolBrackets.indexOf(token);
-                                scopeStack.push
-                                ({
-                                    start:
-                                    {
-                                        position: document.positionAt(tokens[i].index),
-                                        token: tokens[i].token,
-                                    },
-                                    closing: closingSymbolBrackets[index],
-                                    items: [],
-                                });
-                                ++i;
-                            }
-                        );
-                    }
                     if (0 <= closingSymbolBrackets.indexOf(token))
                     {
-                        profile
-                        (
-                            "parseJSON.scan.closingBracket",
-                            () =>
+                        if (previousToken)
+                        {
+                            switch(previousToken.token)
                             {
-                                write(tokens[i]);
-                                ++i;
                             }
-                        );
+                        }
+                        if ("{" === token)
+                        {
+                            scopeStack.push("object");
+                            previousToken = tokens[i];
+                        }
+                        else
+                        //if ("[" === token)
+                        {
+                            scopeStack.push("array");
+                            previousToken = tokens[i];
+                        }
+                    }
+                    else
+                    if (0 <= closingSymbolBrackets.indexOf(token))
+                    {
+                        if ("," === token)
+                        {
+                            
+                        }
+                        scopeStack.pop(); // openingSymbolBrackets と一致して無くても気にしない
                     }
                     else
                     if (0 <= openingInlineStrings.indexOf(token))
                     {
                         profile
                         (
-                            "parseJSON.scan.inlineString",
+                            "scanJSON.scan.inlineString",
                             () =>
                             {
                                 const line = document.positionAt(tokens[i].index).line;
@@ -260,7 +194,7 @@ const scanJSON = (document: vscode.TextDocument) => profile
                                     {
                                         break;
                                     }
-                                    if (closing === regulate(tokens[i].token))
+                                    if (closing === tokens[i].token)
                                     {
                                         ++i;
                                         break;
@@ -277,7 +211,7 @@ const scanJSON = (document: vscode.TextDocument) => profile
                 };
                 profile
                 (
-                    "parseJSON.scan.rest",
+                    "scanJSON.scan.rest",
                     () =>
                     {
                         while(0 < scopeStack.length)
